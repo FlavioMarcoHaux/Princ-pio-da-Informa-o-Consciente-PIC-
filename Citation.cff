@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "Princípio da Informação Consciente (PIC) e Teoria do Campo Sinérgico (SFT)"
+authors:
+  - family-names: "Marco Rego da Silva"
+    given-names: "Flávio"
+    email: "flavio.marco@linc.research"  # (substitua pelo seu email)
+    affiliation: "Laboratório de Pesquisa Interdisciplinar da Consciência (LINC)"
+    orcid: "https://orcid.org/0009-0000-0000-0000"  # (se você tiver um ORCID, coloque aqui)
+version: 1.0
+date-released: 2026-07-27
+url: "https://github.com/FlavioMarcoHaux/Princ-pio-da-Informa-o-Consciente-PIC-"
+repository-code: "https://github.com/FlavioMarcoHaux/Princ-pio-da-Informa-o-Consciente-PIC-"
+license: "MIT"
+keywords:
+  - "Princípio da Informação Consciente"
+  - "Teoria do Campo Sinérgico"
+  - "Consciência"
+  - "Informação Quântica"
+  - "Gravidade Informacional"
+  - "Inferência Ativa"
+  - "Global Workspace"
+  - "HRV"
+  - "Psicodélicos"
+  - "Noosfera"
+abstract: >
+  O Princípio da Informação Consciente (PIC) e a Teoria do Campo Sinérgico (SFT) propõem
+  um novo paradigma para a compreensão da realidade, unificando física fundamental,
+  neurociência, bioenergética, arquitetura de hardware/software, governança, economia,
+  cultura e espiritualidade. O PIC postula que a consciência é uma propriedade fundamental
+  da informação, e que o universo é a dinâmica dessa informação consciente em um processo
+  contínuo de auto-organização e auto-percepção. A SFT formaliza esse princípio,
+  introduzindo um campo escalar sinérgico (\(\phi_S\)) que emerge da sinergia local
+  (O-informação negativa) e atua como potencial de coerência.
+
+  Este repositório contém o compêndio completo do PIC/SFT, protocolos experimentais
+  (H6, H22, H32, etc.), simulações em Python, especificações de hardware (HPU, SFP, HAM,
+  NPS, HI, HRE), dados reais de HRV (PhysioNet Fantasia), e aplicações para ética,
+  governança, economia regenerativa, alimentação e cultura.
+
+  O trabalho é validado empiricamente com dados da PhysioNet, demonstrando que a
+  Variabilidade da Frequência Cardíaca (HRV) modula a capacidade de integração
+  informacional, afetando diretamente a sustentação da consciência.
