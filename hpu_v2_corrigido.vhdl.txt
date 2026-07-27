@@ -1,0 +1,225 @@
+-- ============================================================
+-- HPU (Holon Processing Unit) — REESCRITA COMPLETA v2.0
+-- Corrige os 3 bugs estruturais da v1.0 (Anexo Módulo 4):
+--   1. Propagação do erro (err) perdida entre estágios 2 e 4
+--   2. Ausência de winner-take-all (argmax de saliência entre K canais)
+--   3. Broadcast não implementado (stub vazio)
+--
+-- Arquitetura: em vez de processar 1 canal por vez sequencialmente,
+-- processa os K canais EM PARALELO dentro de cada estágio, e só
+-- então compara saliências para decidir o vencedor (winner-take-all).
+-- Isso é o que corresponde de fato ao modelo Python original.
+-- ============================================================
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.fixed_pkg.all;
+use work.fp16_pkg.all;
+
+entity HPU_v2 is
+  generic (
+    K          : integer := 4;   -- Número de canais/holons
+    DATA_WIDTH : integer := 16;  -- FP16
+    ADDR_WIDTH : integer := 8;
+    FRAC_BITS  : integer := 10
+  );
+  port (
+    clk     : in  std_logic;
+    rst     : in  std_logic;
+    enable  : in  std_logic;
+
+    -- Observações de todos os K canais chegam em paralelo
+    obs_in  : in  sfixed_array(0 to K-1)(DATA_WIDTH-1 downto -FRAC_BITS);
+
+    -- Interface com HAM: agora com 3 portas de leitura simultâneas
+    -- (mu, precision, err_ema_sq) por canal — resolve o bug #2 da v1.0
+    ham_mu_in         : in  sfixed_array(0 to K-1)(DATA_WIDTH-1 downto -FRAC_BITS);
+    ham_precision_in  : in  sfixed_array(0 to K-1)(DATA_WIDTH-1 downto -FRAC_BITS);
+    ham_err_ema_sq_in : in  sfixed_array(0 to K-1)(DATA_WIDTH-1 downto -FRAC_BITS);
+
+    ham_mu_out         : out sfixed_array(0 to K-1)(DATA_WIDTH-1 downto -FRAC_BITS);
+    ham_precision_out  : out sfixed_array(0 to K-1)(DATA_WIDTH-1 downto -FRAC_BITS);
+    ham_err_ema_sq_out : out sfixed_array(0 to K-1)(DATA_WIDTH-1 downto -FRAC_BITS);
+    ham_we             : out std_logic;
+    ham_ready          : in  std_logic;
+
+    -- Controle de período refratário (pode vir fixo ou modulado por HRV real)
+    refractory_period_in : in  integer range 0 to 63;
+
+    -- Limiar de ignição (theta), configurável em runtime
+    ignition_threshold_in : in sfixed(DATA_WIDTH-1 downto -FRAC_BITS);
+
+    -- Sinaliza qual canal ignitou neste ciclo (para HI / broadcast externo)
+    winner_idx_out : out integer range 0 to K-1;
+    ignite_out     : out std_logic;
+
+    hi_ready : out std_logic
+  );
+end HPU_v2;
+
+architecture rtl of HPU_v2 is
+
+  constant KAPPA          : sfixed(DATA_WIDTH-1 downto -FRAC_BITS) := to_sfixed(0.25, DATA_WIDTH-1, -FRAC_BITS);
+  constant PRECISION_EMA  : sfixed(DATA_WIDTH-1 downto -FRAC_BITS) := to_sfixed(0.05, DATA_WIDTH-1, -FRAC_BITS);
+  constant PRECISION_MIN  : sfixed(DATA_WIDTH-1 downto -FRAC_BITS) := to_sfixed(0.1,  DATA_WIDTH-1, -FRAC_BITS);
+  constant PRECISION_MAX  : sfixed(DATA_WIDTH-1 downto -FRAC_BITS) := to_sfixed(5.0,  DATA_WIDTH-1, -FRAC_BITS);
+  constant BROADCAST_GAIN : sfixed(DATA_WIDTH-1 downto -FRAC_BITS) := to_sfixed(0.5,  DATA_WIDTH-1, -FRAC_BITS);
+  constant EPS_FLOOR      : sfixed(DATA_WIDTH-1 downto -FRAC_BITS) := to_sfixed(0.1,  DATA_WIDTH-1, -FRAC_BITS);
+
+  -- Estado por canal (registrado, persiste entre ciclos)
+  type channel_state_array is array (0 to K-1) of sfixed(DATA_WIDTH-1 downto -FRAC_BITS);
+  signal mu_reg         : channel_state_array;
+  signal precision_reg  : channel_state_array;
+  signal err_ema_sq_reg : channel_state_array;
+
+  -- Período refratário: contador por canal (0 = elegível para ignitar)
+  type refractory_counter_array is array (0 to K-1) of integer range 0 to 63;
+  signal refractory_until_reg : refractory_counter_array;
+  signal current_time         : integer range 0 to 1023 := 0;
+
+  -- Combinacional: erro e saliência de cada canal, calculados EM PARALELO
+  signal err_comb      : channel_state_array;
+  signal salience_comb : channel_state_array;
+
+  -- Sinal de elegibilidade (bloqueia canais em refratário)
+  signal eligible_comb : channel_state_array;
+
+begin
+
+  -- ============================================================
+  -- ESTÁGIO 1+2 (fundidos, combinacional): erro e saliência
+  -- BUGFIX #1: err é calculado e mantido vivo até o estágio de
+  -- atualização de mu — nunca é substituído por err_ema_sq.
+  -- ============================================================
+  gen_err_salience: for i in 0 to K-1 generate
+    err_comb(i)      <= resize(obs_in(i) - mu_reg(i), DATA_WIDTH-1, -FRAC_BITS);
+    salience_comb(i) <= resize(precision_reg(i) * (err_comb(i) * err_comb(i)), DATA_WIDTH-1, -FRAC_BITS);
+    eligible_comb(i) <= salience_comb(i) when refractory_until_reg(i) <= current_time
+                        else to_sfixed(-1.0, DATA_WIDTH-1, -FRAC_BITS);
+  end generate;
+
+  -- ============================================================
+  -- ESTÁGIO 3: WINNER-TAKE-ALL (argmax de saliência entre K canais)
+  -- BUGFIX #2: esta lógica não existia na v1.0. Sem ela, o HPU
+  -- nunca decide qual canal "vence" — não há Global Workspace.
+  -- ============================================================
+  process(clk, rst)
+    variable winner_v      : integer range 0 to K-1;
+    variable max_salience_v : sfixed(DATA_WIDTH-1 downto -FRAC_BITS);
+    variable ignite_v      : std_logic;
+    variable mu_new_v      : channel_state_array;
+    variable prec_new_v    : channel_state_array;
+    variable err_ema_new_v : channel_state_array;
+  begin
+    if rst = '1' then
+      for i in 0 to K-1 loop
+        mu_reg(i)             <= to_sfixed(0.0, DATA_WIDTH-1, -FRAC_BITS);
+        precision_reg(i)      <= to_sfixed(1.0, DATA_WIDTH-1, -FRAC_BITS);
+        err_ema_sq_reg(i)     <= to_sfixed(1.0, DATA_WIDTH-1, -FRAC_BITS);
+        refractory_until_reg(i) <= 0;
+      end loop;
+      current_time <= 0;
+      ignite_out   <= '0';
+      winner_idx_out <= 0;
+      hi_ready <= '0';
+
+    elsif rising_edge(clk) and enable = '1' then
+
+      -- Encontra o vencedor (argmax) entre os canais elegíveis
+      winner_v := 0;
+      max_salience_v := eligible_comb(0);
+      for i in 1 to K-1 loop
+        if eligible_comb(i) > max_salience_v then
+          max_salience_v := eligible_comb(i);
+          winner_v := i;
+        end if;
+      end loop;
+
+      ignite_v := '1' when max_salience_v > ignition_threshold_in else '0';
+
+      -- Atualização de mu, precision, err_ema_sq PARA TODOS os canais
+      -- (isso corresponde ao loop "for t in range(T)" do Python,
+      -- executado 1 vez por ciclo de clock, para os K canais)
+      for i in 0 to K-1 loop
+        -- BUGFIX #1 aplicado aqui: usa err_comb(i), não err_ema_sq_reg(i)
+        mu_new_v(i) := resize(mu_reg(i) + (KAPPA * precision_reg(i) * err_comb(i)),
+                              DATA_WIDTH-1, -FRAC_BITS);
+
+        err_ema_new_v(i) := resize(
+          (to_sfixed(1.0, DATA_WIDTH-1, -FRAC_BITS) - PRECISION_EMA) * err_ema_sq_reg(i)
+          + PRECISION_EMA * (err_comb(i) * err_comb(i)),
+          DATA_WIDTH-1, -FRAC_BITS);
+
+        prec_new_v(i) := resize(
+          to_sfixed(1.0, DATA_WIDTH-1, -FRAC_BITS) / (EPS_FLOOR + err_ema_new_v(i)),
+          DATA_WIDTH-1, -FRAC_BITS);
+
+        if prec_new_v(i) < PRECISION_MIN then
+          prec_new_v(i) := PRECISION_MIN;
+        elsif prec_new_v(i) > PRECISION_MAX then
+          prec_new_v(i) := PRECISION_MAX;
+        end if;
+      end loop;
+
+      -- ============================================================
+      -- BUGFIX #3: BROADCAST REAL (não é mais stub)
+      -- Se ignitou, o canal vencedor "puxa" todos os outros
+      -- na direção do seu mu, exatamente como no Python:
+      --   mu[j] += broadcast_gain * (mu[winner] - mu[j])  para j != winner
+      -- ============================================================
+      if ignite_v = '1' then
+        for j in 0 to K-1 loop
+          if j /= winner_v then
+            mu_new_v(j) := resize(
+              mu_new_v(j) + BROADCAST_GAIN * (mu_new_v(winner_v) - mu_new_v(j)),
+              DATA_WIDTH-1, -FRAC_BITS);
+          end if;
+        end loop;
+        refractory_until_reg(winner_v) <= current_time + refractory_period_in;
+      end if;
+
+      -- Commit dos novos estados
+      for i in 0 to K-1 loop
+        mu_reg(i)         <= mu_new_v(i);
+        precision_reg(i)  <= prec_new_v(i);
+        err_ema_sq_reg(i) <= err_ema_new_v(i);
+      end loop;
+
+      -- Saídas para HAM (persistência) e HI (comunicação externa)
+      ham_mu_out         <= mu_new_v;
+      ham_precision_out  <= prec_new_v;
+      ham_err_ema_sq_out <= err_ema_new_v;
+      ham_we             <= '1' when ham_ready = '1' else '0';
+
+      winner_idx_out <= winner_v;
+      ignite_out     <= ignite_v;
+      hi_ready       <= '1';
+
+      current_time <= current_time + 1;
+
+    end if;
+  end process;
+
+end rtl;
+
+-- ============================================================
+-- NOTA DE VALIDAÇÃO (obrigatória antes de qualquer síntese real):
+--
+-- Este código ainda NÃO foi simulado em um simulador VHDL real
+-- (ModelSim/Questa/GHDL). A correção lógica foi verificada por
+-- inspeção, comparando termo a termo com o modelo Python de
+-- referência (Módulo 2, Seção 2.3.2). Antes de sintetizar para
+-- FPGA:
+--   1. Rodar em GHDL ou ModelSim com testbench comparando saída
+--      ciclo a ciclo contra o modelo Python (mesmo seed, mesmas
+--      observações de entrada).
+--   2. Verificar se a divisão (precision_new) precisa de um core
+--      de divisão multi-ciclo (provável, dependendo da ferramenta
+--      de síntese) — isso pode exigir quebrar este processo em
+--      mais estágios de pipeline reais.
+--   3. Validar timing: comparação de K=4 saliências + divisão de
+--      ponto fixo em 1 ciclo pode não fechar timing em 1-2 GHz
+--      como o documento original alegava. Rodar STA (static timing
+--      analysis) antes de qualquer alegação de frequência-alvo.
+-- ============================================================
