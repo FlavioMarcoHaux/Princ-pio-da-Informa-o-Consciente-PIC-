@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+
 # Princípio da Informação Consciente (PIC) e Teoria do Campo Sinérgico (SFT)
 
 **Autor:** Flávio Marco Rego da Silva  
