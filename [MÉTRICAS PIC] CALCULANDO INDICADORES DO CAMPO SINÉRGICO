@@ -1,0 +1,62 @@
+
+# ============================================================
+# CÁLCULO DAS MÉTRICAS PIC/SFT
+# ============================================================
+print("[MÉTRICAS PIC] CALCULANDO INDICADORES DO CAMPO SINÉRGICO...")
+
+# --- Métricas Modelo A (Grid 2D) ---
+# 1. Φ médio global
+phi_mean_A = np.mean(grid_A, axis=(0,1))  # Média espacial ao longo do tempo
+# 2. Entropia de Shannon do campo (distribuição de Φ)
+entropy_A = np.zeros(T)
+# 3. Complexidade (desvio padrão espacial — heterogeneidade estruturada)
+complexity_A = np.std(grid_A, axis=(0,1))
+# 4. Gradiente do campo S = λ ∇Φ
+S_magnitude_A = np.zeros(T)
+# 5. Coerência global (correlação média entre vizinhos)
+coherence_A = np.zeros(T)
+
+for t in range(T):
+    field = grid_A[:,:,t]
+    # Entropia: histograma de Φ em 20 bins
+    hist, _ = np.histogram(field.flatten(), bins=20, range=(0,1), density=True)
+    hist = hist[hist > 0]
+    entropy_A[t] = entropy(hist, base=2)
+    
+    # Gradiente SFT: média do gradiente espacial
+    gy, gx = np.gradient(field)
+    S_magnitude_A[t] = lambda_sft * np.mean(np.sqrt(gx**2 + gy**2))
+    
+    # Coerência: correlação média entre vizinhos horizontais/verticais
+    corr_h = np.mean(field[:,:-1] * field[:,1:])
+    corr_v = np.mean(field[:-1,:] * field[1:,:])
+    coherence_A[t] = (corr_h + corr_v) / 2
+
+# --- Métricas Modelo B (Grafo) ---
+phi_mean_B = np.mean(phi_B, axis=0)
+entropy_B = np.zeros(T)
+complexity_B = np.std(phi_B, axis=0)
+S_magnitude_B = np.zeros(T)
+coherence_B = np.zeros(T)
+
+for t in range(T):
+    vals = phi_B[:,t]
+    hist, _ = np.histogram(vals, bins=20, range=(0,1), density=True)
+    hist = hist[hist > 0]
+    entropy_B[t] = entropy(hist, base=2)
+    
+    # Gradiente no grafo: diferença média ponderada entre vizinhos
+    grad_sum = 0
+    for u, v in G.edges():
+        grad_sum += G[u][v]['weight'] * abs(vals[u] - vals[v])
+    S_magnitude_B[t] = lambda_sft * grad_sum / G.number_of_edges()
+    
+    # Coerência: produto médio Φ_i * Φ_j para arestas (quanto mais similares, maior)
+    edge_prod = [vals[u]*vals[v] for u,v in G.edges()]
+    coherence_B[t] = np.mean(edge_prod)
+
+print("  ✓ Métricas calculadas: Φ, Entropia, Complexidade, S=λ∇Φ, Coerência")
+print()
+
+[MÉTRICAS PIC] CALCULANDO INDICADORES DO CAMPO SINÉRGICO...
+✓ Métricas calculadas: Φ, Entropia, Complexidade, S=λ∇Φ, Coerência
