@@ -1,0 +1,8 @@
+Prompt (template) — prompt-001
+
+Data: 2026-07-29
+Modelo: assistente interno (LLM) — metadados não públicos
+Prompt:
+"Organize meu repositório por pastas acadêmicas e gere arquivos AUTHORS, CONTRIBUTING, NOTICE; mude paths absolutos em scripts python para caminhos relativos (data/, scripts/, figures/)." 
+
+Uso: declare este prompt no PR se alguma saída gerada por IA for usada no commit.
