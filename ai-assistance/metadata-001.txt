@@ -1,0 +1,5 @@
+Model metadata (template) — metadata-001
+
+Data de geração: 2026-07-29
+Modelo: assistente de GitHub Copilot (ou similar) — versão não especificada
+Observações: O autor humano (Flávio) revisou e aprovou todas as mudanças. Este arquivo registra que houve auxílio de IA para organização de repositório.
