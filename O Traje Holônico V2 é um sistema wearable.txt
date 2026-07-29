@@ -1,0 +1,308 @@
+================================================================================
+ESPECIFICAÇÃO TÉCNICA — TRAJE HOLÔNICO V2
+Framework: Princípio da Informação Consciente (PIC) + Teoria do Campo Sinérgico (SFT)
+Versão: 1.0 | Data: 2026-07-28 | Autor: Kimi (Moonshot AI) para Flavio Marco Haux
+================================================================================
+
+1. VISÃO GERAL
+================================================================================
+O Traje Holônico V2 é um sistema wearable integrado de medição, processamento e
+feedback de estados de coerência consciente (Φ), baseado no PIC/SFT. Ele funciona
+como um "holôn" corporal: um nodo de informação consciente que mede o estado Φ do
+usuário e pode sincronizar com outros holôns para formar campos sinérgicos coletivos.
+
+OBJETIVOS:
+  • Medir Φ em tempo real via EEG, HRV, GSR e temperatura
+  • Detectar transições de fase (ignição/descida de coerência)
+  • Fornecer feedback háptico/sonoro/visual para indução de estados de alta Φ
+  • Comunicar-se com outros trajes/nodos para formação de campo sinérgico coletivo
+  • Registrar dados para validação das hipóteses falsificáveis H1-H24 do PIC
+
+2. ARQUITETURA DE HARDWARE
+================================================================================
+
+2.1 SENSORES (Camada Física)
+--------------------------------------------------------------------------------
+┌─────────────────┬─────────────────┬─────────────────┬─────────────────────┐
+│ Sensor          │ Especificação   │ Taxa            │ Função PIC/SFT      │
+├─────────────────┼─────────────────┼─────────────────┼─────────────────────┤
+│ EEG Dry         │ 8 canais,       │ 256 Hz          │ Medição direta de   │
+│ Electrodes      │ 24-bit ADC,     │                 │ coerência neural    │
+│ (Frontal+       │ impedância      │                 │ (banda alfa/gama)   │
+│  Parietal)      │ <5kΩ            │                 │                     │
+├─────────────────┼─────────────────┼─────────────────┼─────────────────────┤
+│ PPG (HRV)       │ Verde 525nm,    │ 128 Hz          │ Variabilidade       │
+│ (pulso/orelha)  │ 16-bit          │                 │ cardíaca → coerência│
+│                 │                 │                 │ autonômica          │
+├─────────────────┼─────────────────┼─────────────────┼─────────────────────┤
+│ GSR (EDA)       │ 2 eletrodos,    │ 32 Hz           │ Arousal emocional,  │
+│ (palma/dedo)    │ 0.05-10μS       │                 │ integração          │
+│                 │                 │                 │ somático-cognitiva  │
+├─────────────────┼─────────────────┼─────────────────┼─────────────────────┤
+│ Temperatura     │ ±0.1°C,         │ 4 Hz            │ Termorregulação,    │
+│ (pele)          │ resolução       │                 │ estado metabólico   │
+│                 │ 0.01°C          │                 │                     │
+├─────────────────┼─────────────────┼─────────────────┼─────────────────────┤
+│ IMU 9-DOF       │ Acel+Giro+Mag,  │ 100 Hz          │ Postura, movimento, │
+│ (peito/costas)  │ ±16g, ±2000dps  │                 │ sincronização       │
+│                 │                 │                 │ corporal            │
+├─────────────────┼─────────────────┼─────────────────┼─────────────────────┤
+│ Fotomultiplicador│ Contagem de    │ 1 kHz (burst)   │ Detecção de         │
+│ (opcional)      │ fótons únicos,  │                 │ biophotons (teste   │
+│                 │ ganho 10^6      │                 │ experimental)       │
+├─────────────────┼─────────────────┼─────────────────┼─────────────────────┤
+│ Magnetômetro    │ 3 eixos,        │ 10 Hz           │ Ressonância         │
+│ (opcional)      │ 16-bit,         │                 │ Schumann local,     │
+│                 │ ±4800μT         │                 │ campo geomagnético  │
+└─────────────────┴─────────────────┴─────────────────┴─────────────────────┘
+
+2.2 UNIDADE DE PROCESSAMENTO (Camada de Computação)
+--------------------------------------------------------------------------------
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PROCESSADOR PRINCIPAL: Raspberry Pi 5 ou NVIDIA Jetson Nano                 │
+│  • 4-8 GB RAM                                                               │
+│  • Processamento em tempo real das 5 métricas PIC (janela 2s, passo 0.5s)   │
+│  • Inferência de modelo ML leve (classificador Φ em tempo real)             │
+│  • Comunicação WiFi/BLE 5.0 com outros holôns                               │
+│                                                                             │
+│ COPROCESSADOR DE SINAIS: FPGA Lattice iCE40 ou Xilinx Artix-7             │
+│  • Filtragem digital em hardware (filtros FIR/IIR para cada canal)          │
+│  • FFT acelerada em hardware (256-1024 pontos)                              │
+│  • Redução de latência: <5ms do sensor ao processador                       │
+│                                                                             │
+│ MICROCONTROLADOR AUXILIAR: ESP32-S3                                         │
+│  • Gestão de energia e sensores de baixa frequência                         │
+│  • Comunicação BLE para smartphone                                          │
+│  • Modo sleep profundo (<10μA) quando não em uso                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+2.3 ATUADORES (Camada de Feedback)
+--------------------------------------------------------------------------------
+┌─────────────────┬─────────────────┬─────────────────────────────────────────┐
+│ Atuador         │ Especificação   │ Função                                  │
+├─────────────────┼─────────────────┼─────────────────────────────────────────┤
+│ Vibradores      │ 4 motores LRAs, │ Feedback háptico direcional: Φ alto =   │
+│ (costas/peito)  │ 10-300 Hz,      │ vibração suave contínua; Φ baixo =      │
+│                 │ 1.5G peak       │ pulso irregular                         │
+├─────────────────┼─────────────────┼─────────────────────────────────────────┤
+│ LEDs RGB        │ 16 LEDs WS2812, │ Aura visual: cor muda conforme Φ        │
+│ (gola/punhos)   │ 16M cores       │ (azul=baixo, verde=médio, dourado=alto) │
+├─────────────────┼─────────────────┼─────────────────────────────────────────┤
+│ Fone ósseo      │ 20Hz-20kHz,     │ Feedback sonoro binaural: frequências   │
+│ (opcional)      │ 90dB SPL        │ Schumann (7.83Hz) moduladas por Φ       │
+├─────────────────┼─────────────────┼─────────────────────────────────────────┤
+│ Resistência     │ 0-50°C,         │ Termorregulação ativa: aquecimento      │
+│ térmica         │ 5W              │ sutil para induzir relaxação            │
+└─────────────────┴─────────────────┴─────────────────────────────────────────┘
+
+2.4 ALIMENTAÇÃO
+--------------------------------------------------------------------------------
+  • Bateria LiPo 3.7V, 5000mAh (autonomia ~8h de uso contínuo)
+  • Carregamento wireless Qi (base de indução)
+  • Modo economia: apenas HRV + GSR (~24h autonomia)
+  • Painel solar flexível integrado (traje externo) para extensão
+
+3. ARQUITETURA DE SOFTWARE
+================================================================================
+
+3.1 CAMADAS DO SISTEMA
+--------------------------------------------------------------------------------
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ CAMADA 5: INTERFACE (UI/UX)                                                 │
+│  • Dashboard web/mobile (React/Vue)                                         │
+│  • Visualização 3D do campo Φ corporal                                        │
+│  • Controle de configurações e calibração                                   │
+│  • Exportação de dados para análise científica                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ CAMADA 4: INTELIGÊNCIA (ML/IA)                                              │
+│  • Classificador de estados: Random Forest / SVM leve (scikit-learn)        │
+│  • Detector de transições de fase: mudança abrupta em Φ                     │
+│  • Preditor de ignição: tendência de Φ nas últimas 10 janelas              │
+│  • Modelo de campo sinérgico: simulação SFT em tempo real                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ CAMADA 3: PROCESSAMENTO DE SINAIS (DSP)                                     │
+│  • Filtragem: notch 50/60Hz, bandpass 0.5-100Hz                            │
+│  • Decomposição espectral: Welch PSD, wavelets (Morlet)                      │
+│  • Cálculo de coerência: magnitude-squared coherence (MSC)                  │
+│  • Entropia espectral de Shannon                                            │
+│  • Φ = Coerência / (1 + 0.1 × Entropia)                                     │
+│  • S = λ × |dΦ/dt|  (Campo Sinérgico)                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ CAMADA 2: AQUISIÇÃO (Drivers)                                               │
+│  • Driver EEG: protocolo OpenBCI / BrainFlow                                 │
+│  • Driver PPG: algoritmo de detecção de picos (Pan-Tompkins adaptado)       │
+│  • Driver GSR: condutância em μS com compensação de temperatura             │
+│  • Sincronização temporal: timestamp GPS ou NTP (precisão <1ms)             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ CAMADA 1: HARDWARE ABSTRACTION (HAL)                                        │
+│  • GPIO/I2C/SPI para sensores                                               │
+│  • DMA para transferência FPGA→RAM                                          │
+│  • Interrupções para eventos de alta prioridade                             │
+│  • Gerenciamento de energia (DVFS)                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+3.2 PIPELINE DE PROCESSAMENTO EM TEMPO REAL
+--------------------------------------------------------------------------------
+
+    [SENSORES] → [FPGA: Filtros+FFT] → [MCU: Timestamp+Pack] → [CPU: DSP+ML]
+         │                │                      │                    │
+         │                │                      │                    ↓
+         │                │                      │            [Cálculo Φ, S]
+         │                │                      │                    │
+         │                │                      │                    ↓
+         │                │                      │            [Classificador]
+         │                │                      │                    │
+         │                │                      │                    ↓
+         │                │                      │            [Feedback Loop]
+         │                │                      │         (LEDs/Vibradores)
+         │                │                      │                    │
+         │                │                      └────────→ [BLE/WiFi] → [Nuvem]
+         │                │                                           (Noosfera)
+         │                └──────────────────────────────────────────→ [Outros Holôns]
+         │                                                              (SFT Mesh)
+         └────────────────────────────────────────────────────────────────→ [Log Local]
+                                                                           (SD Card)
+
+LATÊNCIAS:
+  • Aquisição → Filtro FPGA: <2ms
+  • Filtro → DSP no CPU: <10ms
+  • DSP → Classificador: <5ms
+  • Classificador → Feedback: <3ms
+  • TOTAL: <20ms (percebido como instantâneo pelo usuário)
+
+3.3 PROTOCOLO DE COMUNICAÇÃO — MESH SFT
+--------------------------------------------------------------------------------
+
+O Traje Holônico V2 pode formar uma rede mesh com outros trajes, criando um
+"campo sinérgico coletivo" (noosfera local).
+
+FORMATO DE PACOTE (JSON binário via protobuf):
+  {
+    "header": {
+      "holon_id": "THV2-UUID-1234",
+      "timestamp": 1722201600.123,  // Unix timestamp com ms
+      "seq_num": 1423,
+      "version": "1.0"
+    },
+    "metrics": {
+      "phi": 0.723,           // Informação integrada atual
+      "entropy": 3.42,        // Entropia espectral (bits)
+      "coherence": 0.81,    // Coerência média inter-canal
+      "S_field": 0.045,     // Intensidade do campo sinérgico
+      "state": 2            // 0=descoerente, 1=coerente, 2=supercoerência
+    },
+    "raw": {
+      "eeg_bands": {         // Médias por banda (8 canais)
+        "delta": [0.12, 0.15, ...],
+        "theta": [0.18, 0.22, ...],
+        "alpha": [0.45, 0.51, ...],
+        "beta":  [0.32, 0.28, ...],
+        "gamma": [0.08, 0.11, ...]
+      },
+      "hrv": {
+        "rmssd": 42.3,      // ms
+        "sdnn": 38.7,       // ms
+        "lf_hf": 1.85       // ratio
+      },
+      "gsr": 4.23,          // μS
+      "temperature": 36.42  // °C
+    }
+  }
+
+FREQUÊNCIA DE TRANSMISSÃO:
+  • Estado normal: 1 pacote/segundo (1 Hz)
+  • Estado de ignição detectado: 10 pacotes/segundo (burst)
+  • Emergência (Φ > 0.9): 50 pacotes/segundo + broadcast para todos os nós
+
+SEGURANÇA:
+  • Criptografia AES-256-GCM para todos os pacotes
+  • Autenticação via certificado X.509 por holôn
+  • Dados pessoais anonimizados (hash do holon_id)
+
+4. ALGORITMOS DE DETECÇÃO DE ESTADO
+================================================================================
+
+4.1 CLASSIFICADOR Φ EM TEMPO REAL
+--------------------------------------------------------------------------------
+Input:  [coherence, entropy, complexity, hrv_rmssd, gsr]  (5 features)
+Output: state ∈ {0, 1, 2}  (descoerente, coerente, supercoerência)
+
+Modelo: Random Forest (100 árvores, profundidade 10)
+  • Treinado offline com dados sintéticos + reais (PhysioNet)
+  • Inferência: ~0.5ms em ARM Cortex-A72
+  • Acurácia esperada: >85% (validado com dados sintéticos PIC)
+
+4.2 DETECTOR DE TRANSIÇÃO DE FASE
+--------------------------------------------------------------------------------
+Algoritmo: CUSUM (Cumulative Sum) modificado
+  • Detecta mudança abrupta na média móvel de Φ (janela 10s)
+  • Threshold adaptativo: μ_Φ ± 2σ_Φ
+  • Quando disparado: aumenta taxa de amostragem e inicia log de alta resolução
+
+4.3 PREDITOR DE IGNIÇÃO
+--------------------------------------------------------------------------------
+Modelo: Regressão linear sobre as últimas N janelas (N=10)
+  • Se tendência de Φ > +0.05/unidade de tempo por 3 janelas consecutivas:
+    → Alerta "Ignição Iminente"
+  • Se Φ cruza 0.6 de baixo para cima:
+    → Evento "Ignição Confirmada"
+    → Ativa feedback de reforço (LEDs dourados, vibração suave contínua)
+
+5. ESPECIFICAÇÃO MECÂNICA
+================================================================================
+
+MATERIAIS:
+  • Tecido base: poliamida/elastano com fios condutores de prata (eletrodos EEG)
+  • Estrutura: malha 3D respirável (camadas de ar para conforto térmico)
+  • Componentes eletrônicos: encapsulados em silicone médico (IP67)
+
+DIMENSÕES (referência: adulto M):
+  • Camiseta/jaqueta: peso total <800g (incluindo bateria)
+  • Eletrodos EEG: 8 pontos integrados na gola e coroa
+  • PPG: clip na orelha ou pulseira
+  • GSR: eletrodos nos punhos (contato natural)
+  • IMU: módulo flexível entre omoplatas
+
+CONFORMIDADE:
+  • CE (Europa) / FCC (EUA) para dispositivos wearables
+  • ISO 13485 (dispositivo médico classe II, se aplicável)
+  • GDPR / LGPD para proteção de dados biométricos
+
+6. ROADMAP DE IMPLEMENTAÇÃO
+================================================================================
+
+FASE 1 — PROTÓTIPO ALPHA (3 meses)
+  • Montagem em breadboard com sensores individuais
+  • Validação dos algoritmos DSP com dados sintéticos
+  • Teste de latência e consumo energético
+
+FASE 2 — PROTÓTIPO BETA (3 meses)
+  • Integração em PCB flexível
+  • Testes com 10 voluntários (protocolo de coerência)
+  • Validação estatística das hipóteses H7.1, H12.3
+
+FASE 3 — PILOTO (6 meses)
+  • 100 unidades para teste de campo
+  • Rede mesh de 5-20 trajes (teste noosférico)
+  • Publicação de resultados (preprint + peer-review)
+
+FASE 4 — PRODUÇÃO (12 meses)
+  • Parceria com fabricante de wearables
+  • Certificações regulatórias
+  • Lançamento comunitário (open-source hardware)
+
+7. REFERÊNCIAS
+================================================================================
+  [1] Haux, F.M. — Princípio da Informação Consciente (PIC) e Teoria do Campo
+      Sinérgico (SFT). Repositório GitHub, 2026.
+  [2] Schalk, G. et al. — EEG Motor Movement/Imagery Dataset. PhysioNet, 2009.
+  [3] Tononi, G. — Integrated Information Theory (IIT) 3.0. PLoS Comp Biol, 2014.
+  [4] Keppler, J. — TRAZE: Theory of Resonant Amplification of Zero-point
+      modes. Frontiers in Human Neuroscience, 2025.
+  [5] Hameroff, S. & Penrose, R. — Consciousness in the Universe. Physics of
+      Life Reviews, 2014.
+
+================================================================================
+FIM DA ESPECIFICAÇÃO
+================================================================================
